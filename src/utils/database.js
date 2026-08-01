@@ -8,9 +8,11 @@ const DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
 
 function load() {
   if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ warnings: {}, modlogs: {}, afk: {} }, null, 2));
+    fs.writeFileSync(DB_PATH, JSON.stringify({ warnings: {}, modlogs: {}, afk: {}, removedWarnings: [] }, null, 2));
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  if (!db.removedWarnings) db.removedWarnings = [];
+  return db;
 }
 
 function save(data) {
@@ -30,20 +32,30 @@ function getWarnings(userId) {
   return db.warnings[userId] || [];
 }
 
-function removeWarning(userId, index) {
+function removeWarning(userId, index, removedBy) {
   const db = load();
   if (!db.warnings[userId] || !db.warnings[userId][index]) return null;
   const removed = db.warnings[userId].splice(index, 1)[0];
+  db.removedWarnings.push({ userId, reason: removed.reason, originalModeratorId: removed.moderatorId, removedBy, removedAt: Date.now() });
   save(db);
   return removed;
 }
 
-function clearWarnings(userId) {
+function clearWarnings(userId, removedBy) {
   const db = load();
-  const count = (db.warnings[userId] || []).length;
+  const list = db.warnings[userId] || [];
+  for (const w of list) {
+    db.removedWarnings.push({ userId, reason: w.reason, originalModeratorId: w.moderatorId, removedBy, removedAt: Date.now() });
+  }
+  const count = list.length;
   db.warnings[userId] = [];
   save(db);
   return count;
+}
+
+function getRemovedWarnings(limit = 15) {
+  const db = load();
+  return db.removedWarnings.slice(-limit).reverse();
 }
 
 function addModLog(userId, action, moderatorId, reason) {
@@ -83,6 +95,7 @@ module.exports = {
   getWarnings,
   removeWarning,
   clearWarnings,
+  getRemovedWarnings,
   addModLog,
   getModLogs,
   setAfk,
