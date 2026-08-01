@@ -1,6 +1,7 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../utils/database');
 const EMOJI = require('../utils/emojis');
+const { buildModlogsView } = require('../utils/modlogsView');
 
 module.exports = {
   name: 'interactionCreate',
@@ -20,6 +21,18 @@ module.exports = {
     }
 
     if (!interaction.isButton()) return;
+
+    if (interaction.customId.startsWith('modlogs_page:')) {
+      const [, targetId, pageStr] = interaction.customId.split(':');
+      const page = parseInt(pageStr, 10);
+      const target = await interaction.client.users.fetch(targetId).catch(() => null);
+      if (!target) return interaction.reply({ content: `${EMOJI.CROSS} Пользователь не найден.`, ephemeral: true });
+
+      const logs = db.getModLogs(targetId);
+      const { embed, row } = buildModlogsView(targetId, target.username, logs, page);
+      await interaction.update({ embeds: [embed], components: [row] });
+      return;
+    }
 
     if (interaction.customId === 'view_removed_warnings') {
       const hasPerms = interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers);
