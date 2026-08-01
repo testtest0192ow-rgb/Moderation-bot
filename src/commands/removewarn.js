@@ -14,7 +14,7 @@ module.exports = {
   async execute(interaction) {
     const target = interaction.options.getUser('пользователь');
     const index = interaction.options.getInteger('номер') - 1;
-    const removed = db.removeWarning(target.id, index);
+    const removed = db.removeWarning(target.id, index, interaction.user.id);
 
     if (!removed) return interaction.reply({ content: 'Предупреждение с таким номером не найдено.', ephemeral: true });
 
