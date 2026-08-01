@@ -2,6 +2,7 @@ const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../utils/database');
 const EMOJI = require('../utils/emojis');
 const { buildModlogsView } = require('../utils/modlogsView');
+const { buildHelpView } = require('../utils/helpView');
 
 module.exports = {
   name: 'interactionCreate',
@@ -17,6 +18,13 @@ module.exports = {
         if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
         else await interaction.reply(payload);
       }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'help_category_select') {
+      const categoryKey = interaction.values[0];
+      const { embed, row } = buildHelpView(interaction.client, categoryKey);
+      await interaction.update({ embeds: [embed], components: [row] });
       return;
     }
 
