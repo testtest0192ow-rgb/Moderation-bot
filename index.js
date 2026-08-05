@@ -1,62 +1,39 @@
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { MongoClient } = require('mongodb');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.MessageContent
   ]
 });
 
 client.commands = new Collection();
 
-const commandsPath = path.join(__dirname, 'src', 'commands');
-const commandsJson = [];
-for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) {
-  const command = require(path.join(commandsPath, file));
-  if (command.data) {
-    client.commands.set(command.data.name, command);
-    commandsJson.push(command.data.toJSON());
-  }
+const fs = require('fs');
+const commandFiles = fs.readdirSync('./commands');
+
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+  client.commands.set(command.data.name, command);
 }
 
-const eventsPath = path.join(__dirname, 'src', 'events');
-for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
-  const event = require(path.join(eventsPath, file));
-  if (event.once) client.once(event.name, (...args) => event.execute(...args, client));
-  else client.on(event.name, (...args) => event.execute(...args, client));
-}
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-// Автоматическая регистрация слэш-команд при каждом запуске —
-// не нужно вручную запускать отдельный скрипт деплоя.
-async function registerCommands() {
-  if (!process.env.CLIENT_ID) {
-    console.warn('⚠️  CLIENT_ID не задан — пропускаю автоматическую регистрацию команд.');
-    return;
-  }
-  try {
-    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-    if (process.env.GUILD_ID) {
-      await rest.put(
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-        { body: commandsJson }
-      );
-      console.log(`✅ Зарегистрировано ${commandsJson.length} команд на сервере ${process.env.GUILD_ID}`);
-    } else {
-      await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commandsJson });
-      console.log(`✅ Зарегистрировано ${commandsJson.length} команд глобально (обновление может занять до часа)`);
-    }
-  } catch (err) {
-    console.error('❌ Не удалось зарегистрировать команды:', err);
-  }
-}
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
 
-registerCommands().then(() => client.login(process.env.DISCORD_TOKEN));
+  await command.execute(interaction, client);
+});
 
-// Мини веб-сервер — нужен, чтобы Render (Web Service) видел открытый порт и не "засыпал" бот
-const http = require('http');
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => res.end('Bot is alive ✅')).listen(PORT);
+(async () => {
+  const mongo = new MongoClient("ТВОЙ_MONGO_URI");
+  await mongo.connect();
+
+  client.db = mongo.db("discordBot");
+
+  client.login("ТОКЕН");
+})();
